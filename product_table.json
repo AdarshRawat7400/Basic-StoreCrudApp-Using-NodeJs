@@ -1,0 +1,18 @@
+{
+  "1": {
+    "product_id": "1",
+    "product_name": "soap",
+    "quantity": 2
+  },
+  "2": 99,
+  "3": {
+    "product_id": "3",
+    "product_name": "icecream",
+    "quantity": 101
+  },
+  "4": {
+    "product_id": "4",
+    "product_name": "detergent",
+    "quantity": 100
+  }
+}
