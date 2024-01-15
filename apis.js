@@ -1,24 +1,22 @@
 import express from 'express'
 import { readData,writeData } from './db_utils.js';
 import { randomInt } from 'crypto';
+import db from "./db.js";
 
 
 const router = express.Router();
-const DBNAME = 'product_table'
-const USER_DBNAME = 'users_table'
-const USER_CART = 'user_cart_table'
 
 
-
-router.post('/login',(request,response)=> {
+router.post('/login', async (request,response)=> {
     try{
 
-    const user_db = readData(USER_DBNAME);
     const username = request.body.username
     const password = request.body.password
+    const user = await db.users.findOne({"username":username}) 
+    console.log("USER",user)
 
-    if (user_db.hasOwnProperty(username) && user_db[username].password === password) {
-        return response.cookie("username",username).cookie("login_status",true).status(200).send("<h1> Users Logged in Successfully </h1>")
+    if (user && user.password === password) {
+        return response.cookie("username",username,{expire: 360000 + Date.now()}).cookie("login_status",true,{expire: 360000 + Date.now()}).status(200).send("<h1> Users Logged in Successfully </h1>")
       } else {
         return response.status(404).send(`<h1> User not Found or password Incorrect </h1>`);
     }
@@ -28,21 +26,36 @@ router.post('/login',(request,response)=> {
         return response.status(404).json({ "error": error.message });
     }
 });
-
-router.post('/signup',(request,response)=> {
+router.post('/logout', async (request,response)=> {
     try{
 
-    const user_db = readData(USER_DBNAME);
-    const user_data = request.body
+    const username = request.body.username
 
-    if (user_db.hasOwnProperty(user_data.username) ) {
+    if (username) {
+        return response.clearCookie('username').clearCookie('login_status').status(200).send("<h1> User Logout  Successfully </h1>")
+      } else {
+        return response.status(404).send(`<h1> USER NOT lOGGED IN </h1>`);
+    }
+    }
+    catch (error) {
+        // Handle the exception
+        return response.status(404).json({ "error": error.message });
+    }
+});
+
+router.post('/signup', async (request,response)=> {
+    try{
+
+    const user_data = request.body
+    
+    const user = await db.users.findOne({"username":user_data.username}) 
+
+    if (user) {
         return response.status(400).json({"error": `User with ${user_data.username} Already Exist`});
       } else {
 
-        const user_db = readData(USER_DBNAME);
-        user_db[user_data.username] = user_data
-        console.log("USER DB",user_db)
-        writeData(USER_DBNAME,user_db)
+        await db.users.insertOne(user_data)
+        
         return response.status(201).json({"success": `User Successfully Created`});
 
     }
@@ -53,21 +66,12 @@ router.post('/signup',(request,response)=> {
     }
 });
 
-router.get('/user/cart/items',(request,response)=> {
+router.get('/user/cart/items',async (request,response)=> {
     try{
-        if (request.cookies.username  && request.cookies.login_status) {
-            const db = readData(USER_CART);
-            
-            const filteredData = [];
-
-            // Iterate over the properties of the JSON object
-            for (const key in db) {
-            if (db.hasOwnProperty(key) && db[key].username === request.cookies.username) {
-                let entry = db[key]
-                entry["order_id"] = key
-                filteredData.push(entry);
-            }
-            }
+        const user = await db.users.findOne({"username":request.cookies.username}) 
+        if (request.cookies.username  && request.cookies.login_status && user) {
+            const username = request.cookies.username
+            const filteredData = await db.cart.find({'username':username}).toArray();     
             return response.status(200).json(filteredData);
           } else {
             return response.status(400).json({"error": `User Not Logged in`});
@@ -81,26 +85,30 @@ router.get('/user/cart/items',(request,response)=> {
     
 });
 
-router.post('/user/cart/items',(request,response)=> {
+router.post('/user/cart/items',async (request,response)=> {
     try{
-        const user_db = readData(USER_DBNAME);
-        if (request.cookies.username && user_db.hasOwnProperty(request.cookies.username) && request.cookies.login_status ) {
-            console.log("IM HERE ADSASD")
-            const cart_db = readData(USER_CART)
-            const products_db = readData(DBNAME)
-            const product = request.body
-            if(product.id  && products_db.hasOwnProperty(product.id)){
-                if(products_db[product.id].quantity == 0){
+        const user = await db.users.findOne({"username":request.cookies.username}) 
+        if (request.cookies.username && request.cookies.login_status && user) {
+            const product_data = request.body
+            const product = await db.products.findOne({'product_id':product_data.id})
+        
+            if(product){
+                if(product.quantity == 0){
                     return response.status(400).json({"error": "Product out-of-stock"});
                 }
-                const id = randomInt(10000000)
-                cart_db[id] = products_db[product.id]
-                cart_db[id].username = request.cookies.username
-                console.log("CART DB",cart_db)
-                writeData(USER_CART,cart_db)
-                products_db[product.id] = products_db[product.id].quantity-1
-                writeData(DBNAME,products_db)
-
+                const id = randomInt(10000000000)
+                
+                const item_json = product
+                item_json['item_unique_id']=id
+                item_json['username'] = request.cookies.username
+                delete item_json._id
+                await db.cart.insertOne(item_json)
+                await db.products.updateOne
+                // Update the document based on its unique _id field
+                await db.products.updateOne(
+                    { product_id:product.product_id },
+                    { $set: { ['quantity']: product.quantity-1 } }
+                );
                 return response.status(200).json({"success": "Product Added to Cart Successfully"});
             }
             else{
@@ -119,20 +127,20 @@ router.post('/user/cart/items',(request,response)=> {
     
 });
 
-router.delete('/user/cart/items/:order_id',(request,response)=> {
+router.delete('/user/cart/items/:order_id', async (request,response)=> {
     try{
-        const user_db = readData(USER_DBNAME);
-        if (request.cookies.username && user_db.hasOwnProperty(request.cookies.username) && request.cookies.login_status ) {
-            const cart_db = readData(USER_CART)
-            const products_db = readData(DBNAME)
-            const order_id = request.params.order_id
-            if(order_id  && cart_db.hasOwnProperty(order_id) && cart_db[order_id].username == request.cookies.username){
-                const product_id = cart_db[order_id].product_id
-                delete cart_db[order_id]
-                console.log("pro",products_db[product_id])
-                products_db[product_id].quantity += 1
-                writeData(USER_CART,cart_db)
-                writeData(DBNAME,products_db)
+        const user = await db.users.findOne({"username":request.cookies.username}) 
+        if (request.cookies.username && request.cookies.login_status && user) {
+            const order_id = parseInt(request.params.order_id)
+            const order = await db.cart.findOne({'item_unique_id':order_id})
+            if(order && order.username == request.cookies.username){
+                const product_id = order.product_id
+                const product  = await db.products.find({"product_id":product_id})
+                await db.cart.deleteOne({"item_unique_id":order_id})
+                await db.products.updateOne(
+                    { product_id: product_id },
+                    { $set: { ['quantity']: product.quantity+1 } }
+                );
 
                 return response.status(200).json({"success": "Product Removed from Cart Successfully"});
             }
@@ -153,12 +161,24 @@ router.delete('/user/cart/items/:order_id',(request,response)=> {
 });
 
 
-router.get('/products',(request,response)=> {
+router.get('/products',async (request,response)=> {
     try{
-    const db = readData(DBNAME);
-    console.log(db);
-    return response.status(200).json(db);
+    
+        const user = await db.users.findOne({"username":request.cookies.username}) 
+        console.log("AWAIT ",user.role)
+
+        if (request.cookies.username  && request.cookies.login_status && user && user.role === 'admin') {
+
+    const products = await db.products.find()
+    const products_json = await products.toArray();
+
+    return response.status(200).json(products_json);
     }
+    else {
+        return response.status(404).json({"error":"User Not Found or Not Authorized"});
+    
+    }
+}
     catch (error) {
         // Handle the exception
         return response.status(404).json({ "error": error.message });
@@ -166,16 +186,22 @@ router.get('/products',(request,response)=> {
 });
 
 
-router.get('/products/:id',(request,response)=> {
+router.get('/products/:id', async (request,response)=> {
     try{
+        const user = await db.users.findOne({"username":request.cookies.username}) 
+        if (request.cookies.username  && request.cookies.login_status && user && user.role === 'admin') {
     const id = parseInt(request.params.id)
-    const db = readData(DBNAME);
-    if (db.hasOwnProperty(id)) {
-        const data =  db[id]
-        return response.status(200).json({"data":data});
+    const products = await db.products.findOne({"product_id":id})
+    if (products) {
+        return response.status(200).json({"data":products});
       } else {
         return response.status(404).json({"error":"Product Not Found"});
     }
+}
+else {
+    return response.status(400).json({"error": `User Not Logged in  or Not Authorized`});
+
+}
 }
 catch (error) {
     // Handle the exception
@@ -184,16 +210,20 @@ catch (error) {
 });
 
 
-router.post('/products',(request,response)=> {
+router.post('/products',async (request,response)=> {
     try{
-    const db = readData(DBNAME);
-    const id = randomInt(1000);
-    console.log(db)
-    const data = request.body
-    db[id] = data
-    writeData(DBNAME,db)
+        const user = await db.users.findOne({"username":request.cookies.username}) 
+        if (request.cookies.username  && request.cookies.login_status && user && user.role === 'admin') {
+    const id = randomInt(1000000000);
+    const product_data = request.body
+    product_data['product_id'] = id
+    await db.products.insertOne(product_data)
     return response.status(201).json({"success":"Product Added Successfully!"});
     }
+    else {
+        return response.status(400).json({"error": `User Not Logged in or Not Authorized`});
+    }
+}
     catch (error) {
         // Handle the exception
         return response.status(404).json({ "error": error.message });
@@ -201,18 +231,31 @@ router.post('/products',(request,response)=> {
 });
 
 
-router.put('/products/:id',(request,response)=> {
+router.put('/products/:id',async (request,response)=> {
     try{
-    const db = readData(DBNAME);
-    const id = request.params.id
-    if (db.hasOwnProperty(id)) {
-        const data = request.body
-        db[id] = data
-        writeData(DBNAME,db)
-        return response.status(200).json({"success":"Product Updated Successfully!"});
+    const product_id = parseInt(request.params.id)
+    const product = await db.products.findOne({"product_id":product_id})
+    const user = await db.users.findOne({"username":request.cookies.username}) 
+    if (request.cookies.username  && request.cookies.login_status && user && user.role === 'admin') {
+    if (product) {
+        const data = request.body;
+        // Assuming 'product_id' is a unique identifier in your collection
+        const result = await db.products.updateOne(
+          { "product_id": product_id },
+          { $set: data }
+        );
+  
+        if (result.modifiedCount > 0) {
+          return response.status(200).json({"success": "Product Updated Successfully!"});
+        } else {
+          return response.status(500).json({"error": "Failed to update product"});
+        }
       } else {
         return response.status(404).json({"error":"Product Not Found"});
     }
+}else{
+    return response.status(400).json({"error": `User Not Logged in or Not Authorized`});
+}
 }
 catch (error) {
     // Handle the exception
@@ -221,17 +264,23 @@ catch (error) {
 });
 
 
-router.delete('/products/:id',(request,response)=> {
+router.delete('/products/:id',async (request,response)=> {
     try{
-    const db = readData(DBNAME);
-    const id = request.params.id
-    if (db.hasOwnProperty(id)) {
-        delete db[id]
-        writeData(DBNAME,db);
+    const user = await db.users.findOne({"username":request.cookies.username}) 
+    if (request.cookies.username  && request.cookies.login_status && user && user.role === 'admin') {
+    const id = parseInt(request.params.id)
+    const product = await db.products.findOne({"product_id":id})
+    if (product) {
+        await db.products.deleteOne({"product_id":id})
         return response.status(200).json({"success":"Product Deleted Successfully!"});
       } else {
         return response.status(404).json({"error":"Product Not Found"});
     }
+}
+else {
+    return response.status(400).json({"error": `User Not Logged In  or Not Authorized`});
+
+}
 }
 catch (error) {
     // Handle the exception
