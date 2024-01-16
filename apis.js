@@ -1,8 +1,7 @@
 import express from 'express'
-import { hashPassword, comparePassword } from './utils.js';
-import { randomInt } from 'crypto';
+import { hashPassword, comparePassword,generateItemUniqueItemId,generateProductUniqueItemId  } from './utils.js';
 import db from "./db.js";
-import { isAuthenticated, generateToken } from './authentication.js';
+import { isAuthenticated, generateToken} from './authentication.js';
 
 
 const router = express.Router();
@@ -19,14 +18,14 @@ router.post('/login', async (request, response) => {
 
         if (user && await comparePassword(plainPassword, user.password)) {
             request.session.token = token;
-            return response.status(200).send("<h1> Users Logged in Successfully </h1>")
+            return response.status(200).json({"status":true,"message":" Users Logged in Successfully"})
         } else {
-            return response.status(404).send(`<h1> User not Found or password Incorrect </h1>`);
+            return response.status(400).json({"status":false,"message":" User not Found or password Incorrect"})
         }
     }
     catch (error) {
         // Handle the exception
-        return response.status(404).json({ "error": error.message });
+        return response.status(404).json({"status":false, "message": error.message });
     }
 });
 router.get('/logout', isAuthenticated, async (request, response) => {
@@ -34,11 +33,11 @@ router.get('/logout', isAuthenticated, async (request, response) => {
         // Clear the token from the session
         request.session.token = null;
 
-        return response.status(200).send("<h1> User Logout  Successfully </h1>")
+        return response.status(200).send("<h1>  </h1>").json({"status":true,"message":" User Logout  Successfully"})
     }
     catch (error) {
         // Handle the exception
-        return response.status(404).json({ "error": error.message });
+        return response.status(500).json({"status":false, "message": error.message });
     }
 });
 
@@ -54,18 +53,18 @@ router.post('/signup', async (request, response) => {
             const user_data = request.body
             user_data.password = hashedPassword
             await db.users.insertOne(user_data)
-            return response.status(201).json({ "success": `User Successfully Created,Try Login` });
+            return response.status(201).json({ "status":true, "message": `User Successfully Created,Try Login` });
 
         } else {
 
 
-            return response.status(400).json({ "error": `User with ${username} Already Exist` });
+            return response.status(400).json({"status":false, "message": `User with ${username} Already Exist` });
 
         }
     }
     catch (error) {
         // Handle the exception
-        return response.status(404).json({ "error": error.message });
+        return response.status(500).json({"status":false, "message": error.message });
     }
 });
 
@@ -75,12 +74,12 @@ router.get('/user/cart/items', isAuthenticated, async (request, response) => {
 
         const username = user.username
         const filteredData = await db.cart.find({ 'username': username }).toArray();
-        return response.status(200).json(filteredData);
+        return response.status(200).json({"status":true, "data" : filteredData});
     }
 
     catch (error) {
         // Handle the exception
-        return response.status(404).json({ "error": error.message });
+        return response.status(500).json({"status":false, "message": error.message });
     }
 
 });
@@ -93,9 +92,9 @@ router.post('/user/cart/items', isAuthenticated, async (request, response) => {
 
         if (product) {
             if (product.quantity == 0) {
-                return response.status(400).json({ "error": "Product out-of-stock" });
+                return response.status(400).json({"status":false, "message": "Product out-of-stock" });
             }
-            const id = randomInt(10000000000)
+            const id = generateItemUniqueItemId()
 
             const item_json = product
             item_json['item_unique_id'] = id
@@ -108,16 +107,16 @@ router.post('/user/cart/items', isAuthenticated, async (request, response) => {
                 { product_id: product.product_id },
                 { $set: { ['quantity']: product.quantity - 1 } }
             );
-            return response.status(200).json({ "success": "Product Added to Cart Successfully" });
+            return response.status(200).json({"status":true, "message": "Product Added to Cart Successfully" });
 
         } else {
-            return response.status(400).json({ "error": `User Not Logged in` });
+            return response.status(400).json({"status":false, "message": `User Not Logged in` });
 
         }
     }
     catch (error) {
         // Handle the exception
-        return response.status(404).json({ "error": error.message });
+        return response.status(500).json({ "status":false,"message": error.message });
     }
 
 });
@@ -136,16 +135,16 @@ router.delete('/user/cart/items/:order_id', isAuthenticated, async (request, res
                 { $set: { ['quantity']: product.quantity + 1 } }
             );
 
-            return response.status(200).json({ "success": "Product Removed from Cart Successfully" });
+            return response.status(200).json({"status":true, "message": "Product Removed from Cart Successfully" });
 
         } else {
-            return response.status(400).json({ "error": `User Not Logged in` });
+            return response.status(400).json({"status":false, "message": `User Not Logged in` });
 
         }
     }
     catch (error) {
         // Handle the exception
-        return response.status(404).json({ "error": error.message });
+        return response.status(500).json({ "status":false,"message": error.message });
     }
 
 });
@@ -157,11 +156,11 @@ router.get('/products', isAuthenticated, async (request, response) => {
         const user = request.user
         const products = await db.products.find().toArray();
 
-        return response.status(200).json(products);
+        return response.status(200).json({"status":true,"data":products});
     }
     catch (error) {
         // Handle the exception
-        return response.status(404).json({ "error": error.message });
+        return response.status(500).json({"status":false, "message": error.message });
     }
 });
 
@@ -173,14 +172,14 @@ router.get('/products/:id', isAuthenticated, async (request, response) => {
         const products = await db.products.findOne({ "product_id": id })
 
         if (products) {
-            return response.status(200).json({ "data": products });
+            return response.status(200).json({"status":true,"data": products });
         } else {
-            return response.status(404).json({ "error": "Product Not Found" });
+            return response.status(404).json({ "status":false,"message": "Product Not Found" });
         }
     }
     catch (error) {
         // Handle the exception
-        return response.status(404).json({ "error": error.message });
+        return response.status(500).json({"status":false, "message": error.message });
     }
 });
 
@@ -189,19 +188,19 @@ router.post('/products', isAuthenticated, async (request, response) => {
     try {
         const user = request.user
         if (user.role != 'admin') {
-            return response.status(404).json({ "error": "User do not have privilage to perform following action!" });
+            return response.status(404).json({ "status":false, "message": "User do not have privilage to perform following action!" });
 
         }
-        const id = randomInt(1000000000);
+        const id = generateProductUniqueItemId()
         const product_data = request.body
         product_data['product_id'] = id
         await db.products.insertOne(product_data)
-        return response.status(201).json({ "success": "Product Added Successfully!" });
+        return response.status(201).json({"status":true, "message": "Product Added Successfully!" });
 
     }
     catch (error) {
         // Handle the exception
-        return response.status(404).json({ "error": error.message });
+        return response.status(500).json({ "status":false,"message": error.message });
     }
 });
 
@@ -212,7 +211,7 @@ router.put('/products/:id', isAuthenticated, async (request, response) => {
         const product = await db.products.findOne({ "product_id": product_id })
         const user = request.user
         if (user.role != 'admin') {
-            return response.status(404).json({ "error": "User do not have privilage to perform following action!" });
+            return response.status(401).json({"status":false,"message": "User do not have privilage to perform following action!" });
         }
         if (product) {
             const data = request.body;
@@ -223,18 +222,18 @@ router.put('/products/:id', isAuthenticated, async (request, response) => {
             );
 
             if (result.modifiedCount > 0) {
-                return response.status(200).json({ "success": "Product Updated Successfully!" });
+                return response.status(200).json({ "status":true,"message": "Product Updated Successfully!" });
             } else {
-                return response.status(500).json({ "error": "Failed to update product" });
+                return response.status(500).json({ "status":false,"message": "Failed to update product" });
             }
         } else {
-            return response.status(404).json({ "error": "Product Not Found" });
+            return response.status(404).json({"status":false, "message": "Product Not Found" });
         }
 
     }
     catch (error) {
         // Handle the exception
-        return response.status(404).json({ "error": error.message });
+        return response.status(500).json({"status":false, "message": error.message });
     }
 });
 
@@ -243,28 +242,28 @@ router.delete('/products/:id', isAuthenticated, async (request, response) => {
     try {
         const user = request.user
         if (user.role != 'admin') {
-            return response.status(404).json({ "error": "User do not have privilage to perform following action!" });
+            return response.status(401).json({ "status":false,"message": "User do not have privilage to perform following action!" });
 
         }
         const id = parseInt(request.params.id)
         const product = await db.products.findOne({ "product_id": id })
         if (product) {
             await db.products.deleteOne({ "product_id": id })
-            return response.status(200).json({ "success": "Product Deleted Successfully!" });
+            return response.status(200).json({"status":true, "message": "Product Deleted Successfully!" });
         } else {
-            return response.status(404).json({ "error": "Product Not Found" });
+            return response.status(404).json({"status":false, "message": "Product Not Found" });
         }
 
     }
     catch (error) {
         // Handle the exception
-        return response.status(404).json({ "error": error.message });
+        return response.status(500).json({"status":false, "message": error.message });
     }
 });
 
 //Other routes here
 router.get('*', function (req, res) {
-    res.send('Sorry, this is an invalid URL.');
+    res.status(404).send('Sorry, this is an invalid URL.');
 });
 
 export default router;
