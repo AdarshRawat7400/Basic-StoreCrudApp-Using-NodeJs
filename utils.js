@@ -16,18 +16,20 @@ const comparePassword = async (plainPassword, hashedPassword) => {
 
 const generateItemUniqueItemId = async () => {
   let uniqueId;
+  let existingItem = null;
   do {
     uniqueId = randomInt(10000000000);
-    const existingItem = await db.cart.findOne({ "item_unique_id": uniqueId });
+    existingItem = await db.cart.findOne({ "item_unique_id": uniqueId });
   } while (existingItem);
 
   return uniqueId;
 };
 const generateProductUniqueItemId = async () => {
   let uniqueId;
+  let existingItem = null;
   do {
     uniqueId = randomInt(10000000000);
-    const existingItem = await db.products.findOne({ "product_id": uniqueId });
+    existingItem = await db.products.findOne({ "product_id": uniqueId });
   } while (existingItem);
 
   return uniqueId;

@@ -94,7 +94,7 @@ router.post('/user/cart/items', isAuthenticated, async (request, response) => {
             if (product.quantity == 0) {
                 return response.status(400).json({"status":false, "message": "Product out-of-stock" });
             }
-            const id = generateItemUniqueItemId()
+            const id = await generateItemUniqueItemId()
 
             const item_json = product
             item_json['item_unique_id'] = id
@@ -191,7 +191,7 @@ router.post('/products', isAuthenticated, async (request, response) => {
             return response.status(404).json({ "status":false, "message": "User do not have privilage to perform following action!" });
 
         }
-        const id = generateProductUniqueItemId()
+        const id = await generateProductUniqueItemId()
         const product_data = request.body
         product_data['product_id'] = id
         await db.products.insertOne(product_data)
