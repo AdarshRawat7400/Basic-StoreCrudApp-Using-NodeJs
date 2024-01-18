@@ -1,6 +1,6 @@
 import { MongoClient } from "mongodb";
 // const ConnectionURI = 'mongodb+srv://arawat1:<yotadota>@storefront.gsefmcd.mongodb.net/?retryWrites=true&w=majority'
-const ConnectionURI = 'mongodb+srv://adarsh:rawat@storefront.k0jnt7x.mongodb.net/?retryWrites=true&w=majority'
+const ConnectionURI = process.env.DATABASE_URL
 const client = new MongoClient(ConnectionURI);
 await client.connect();
 
