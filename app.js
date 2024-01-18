@@ -5,7 +5,7 @@ import { RequestLoggerMiddleware } from "./middleware.js"
 import session from 'express-session';
 
 
-const PORT = process.env.PORT
+const PORT = 5000
 const app = express()
 app.use(express.json());
 app.use(cookieParser());
